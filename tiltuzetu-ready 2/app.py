@@ -41,8 +41,6 @@ app = FastAPI(
     version="0.4.0",
 )
 
-
-# Request and response models
 class CorrectRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
 
@@ -185,7 +183,6 @@ def save_history(record: dict):
             pass
 
 
-# Provider 1: MyMemory
 def translate_mymemory(
     text: str,
     source: str,
@@ -231,9 +228,6 @@ def translate_mymemory(
 
     return translated
 
-
-# Provider 2: Google Translate public endpoint.
-# This endpoint is unofficial and is not guaranteed to remain available.
 def translate_google(
     text: str,
     source: str,
@@ -287,7 +281,6 @@ def translate_google(
         ) from exc
 
 
-# Health check
 @app.get("/api/health")
 def health():
     mongo_enabled = bool(
@@ -376,7 +369,6 @@ def correct(request: CorrectRequest):
     )
 
 
-# Translate text
 @app.post(
     "/api/translate",
     response_model=TranslateResponse,
@@ -400,7 +392,6 @@ def translate(request: TranslateRequest):
     provider = None
     demo = False
 
-    # First, try MyMemory.
     try:
         translated = translate_mymemory(
             text,
@@ -410,7 +401,6 @@ def translate(request: TranslateRequest):
         provider = "MyMemory Translation API"
 
     except Exception:
-        # If MyMemory fails, try Google Translate.
         try:
             translated = translate_google(
                 text,
@@ -420,7 +410,6 @@ def translate(request: TranslateRequest):
             provider = "Google Translate"
 
         except Exception:
-            # Last fallback: exact phrases from the demo dictionary.
             normalized = text.casefold().strip()
             demo_translation = DEMO_TRANSLATIONS.get(
                 (normalized, request.target_language)
@@ -460,7 +449,6 @@ def translate(request: TranslateRequest):
     )
 
 
-# Recent history
 @app.get("/api/history")
 def history():
     collection = mongo_collection()
@@ -496,7 +484,6 @@ def history():
         }
 
 
-# Serve the frontend
 @app.get("/")
 def index():
     return FileResponse(
