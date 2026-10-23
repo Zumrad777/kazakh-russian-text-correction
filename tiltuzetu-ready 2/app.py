@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 
-# Load environment variables from .env if the file exists.
+
 def load_dotenv():
     env_file = Path(__file__).with_name(".env")
 
@@ -68,7 +68,7 @@ class TranslateResponse(BaseModel):
     demo_mode: bool
 
 
-# Sample spelling correction rules
+
 CORRECTION_RULES = [
     (r"\bsalem\b", "сәлем"),
     (r"\bсалем\b", "сәлем"),
@@ -115,7 +115,7 @@ def correct_text(text: str):
     return result, changes
 
 
-# Prepared translations used only if both online providers fail.
+
 DEMO_TRANSLATIONS = {
     ("сәлем", "en"): "Hello",
     ("сәлем!", "en"): "Hello!",
@@ -148,7 +148,7 @@ DEMO_TRANSLATIONS = {
 }
 
 
-# MongoDB connection (optional)
+
 def mongo_collection():
     uri = os.getenv("MONGODB_URI", "").strip()
 
