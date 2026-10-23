@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f7fc">
+  <title>TilTüzету — Text correction & translation</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="logo">Tü</span><span><strong>TilTüzету</strong><small>Text correction & translation</small></span></a>
+  </header>
+  <main class="container">
+    <section class="hero">
+      <div class="eyebrow">KAZAKH · RUSSIAN · ENGLISH</div>
+      <h1>Write naturally.<br><em>We’ll help refine your text.</em></h1>
+      <p>Enter Kazakh, Russian, or mixed text. Review suggested corrections, then translate the text you approve.</p>
+    </section>
+
+    <section class="steps">
+      <article><span>01</span><div><b>Enter your text</b><p>Write in Kazakh, Russian, or a mix of both languages.</p></div></article>
+      <article><span>02</span><div><b>Review corrections</b><p>Check the suggestion and decide whether to accept it.</p></div></article>
+      <article><span>03</span><div><b>Translate</b><p>Choose a source and target language, then view the result.</p></div></article>
+    </section>
+
+    <section class="workspace">
+      <div class="panel">
+        <div class="panel-title"><span class="number">01</span><div><h2>Original text</h2><p>Enter your text below</p></div></div>
+        <label for="sourceText">Your text</label>
+        <textarea id="sourceText" maxlength="5000" placeholder="Мысалы: Салем, казакша калай жазам?" spellcheck="true"></textarea><div class="examples"><button type="button" class="example-btn" data-example="Салем! Мен бугин универге бардым, но домашку истемедим.">Mixed text example</button><button type="button" class="example-btn" data-example="Салем, казакша калай жазам?">Kazakh example</button></div>
+        <div class="meta"><span id="count">0 / 5000 characters</span><span>Up to 5,000 characters</span></div>
+        <button class="primary" id="correctBtn">Suggest corrections <span>→</span></button>
+        <div id="correctionMessage" class="message" role="status"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><span class="number purple">02</span><div><h2>Review corrections</h2><p>Accept the suggestion or keep your original</p></div></div>
+        <label for="correctedText">Suggested version</label>
+        <textarea id="correctedText" placeholder="Your suggested text will appear here" readonly></textarea>
+        <div class="actions">
+          <button class="secondary" id="keepBtn" disabled>Keep original</button>
+          <button class="primary" id="acceptBtn" disabled>Accept correction</button>
+        </div>
+        <div id="reviewMessage" class="message" role="status"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><span class="number green">03</span><div><h2>Translate reviewed text</h2><p>Choose the target language</p></div></div>
+        <label for="sourceLanguage">Text is mostly in</label>
+        <select id="sourceLanguage"><option value="ru">🇷🇺 Русский</option><option value="kk">🇰🇿 Қазақша</option><option value="en">🇬🇧 English</option></select>
+        <label for="targetLanguage" style="margin-top:12px">Translate to</label>
+        <select id="targetLanguage"><option value="en">🇬🇧 English</option><option value="kk">🇰🇿 Қазақша</option><option value="ru">🇷🇺 Русский</option></select>
+        <button class="primary translate-btn" id="translateBtn" disabled>Translate text <span>→</span></button>
+        <label for="translatedText" class="result-label">Translation result</label>
+        <textarea id="translatedText" placeholder="Your translation will appear here" readonly></textarea>
+        <div id="translationMessage" class="message" role="status"></div>
+      </div>
+    </section>
+
+    <footer><strong>TilTüzету</strong><span>Student project MVP · 2026</span></footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
