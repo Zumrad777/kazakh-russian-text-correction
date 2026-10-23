@@ -13,28 +13,36 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 
+# Load environment variables from .env if the file exists.
 def load_dotenv():
     env_file = Path(__file__).with_name(".env")
+
     if env_file.exists():
         for raw in env_file.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
+
             if not line or line.startswith("#") or "=" not in line:
                 continue
+
             key, value = line.split("=", 1)
+
             os.environ.setdefault(
-                key.strip(), value.strip().strip('"').strip("'")
+                key.strip(),
+                value.strip().strip('"').strip("'")
             )
 
 
 load_dotenv()
 
+
 app = FastAPI(
     title="TilTüzету API",
     description="MVP for mixed Kazakh/Russian text correction and translation.",
-    version="0.3.1",
+    version="0.4.0",
 )
 
 
+# Request and response models
 class CorrectRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
 
@@ -60,6 +68,7 @@ class TranslateResponse(BaseModel):
     demo_mode: bool
 
 
+# Sample spelling correction rules
 CORRECTION_RULES = [
     (r"\bsalem\b", "сәлем"),
     (r"\bсалем\b", "сәлем"),
@@ -72,7 +81,6 @@ CORRECTION_RULES = [
     (r"\bжок\b", "жоқ"),
     (r"\бия\b", "иә"),
     (r"\bуниверге\b", "университетке"),
-    (r"\ббу́гин\b", "бүгін"),
     (r"\bбугин\b", "бүгін"),
     (r"\bистемедим\b", "істемедім"),
 ]
@@ -87,13 +95,17 @@ def correct_text(text: str):
 
         def replace_case(match):
             found = match.group(0)
+
             if found.isupper():
                 return replacement.upper()
+
             if found[:1].isupper():
                 return replacement[:1].upper() + replacement[1:]
+
             return replacement
 
         updated, count = regex.subn(replace_case, result)
+
         if count:
             changes.append(
                 f"{pattern[2:-2]} → {replacement} ({count})"
@@ -103,13 +115,17 @@ def correct_text(text: str):
     return result, changes
 
 
-# These are prepared examples for demonstration only.
+# Prepared translations used only if both online providers fail.
 DEMO_TRANSLATIONS = {
     ("сәлем", "en"): "Hello",
+    ("сәлем!", "en"): "Hello!",
+    ("салем", "en"): "Hello",
+    ("салем!", "en"): "Hello!",
     ("hello", "kk"): "Сәлем",
     ("hello", "ru"): "Привет",
     ("привет", "en"): "Hello",
     ("привет", "kk"): "Сәлем",
+    ("привет!", "en"): "Hello!",
     ("спасибо", "kk"): "Рақмет",
     ("спасибо", "en"): "Thank you",
     ("thank you", "kk"): "Рақмет",
@@ -118,34 +134,50 @@ DEMO_TRANSLATIONS = {
     ("рақмет", "ru"): "Спасибо",
     ("как дела?", "en"): "How are you?",
     ("как дела?", "kk"): "Қалайсың?",
-
     ("сәлем", "ru"): "Привет",
+    ("сәлем!", "ru"): "Привет!",
+    ("салем!", "ru"): "Привет!",
     ("сәлеметсіз бе", "ru"): "Здравствуйте",
     ("қалайсың?", "ru"): "Как дела?",
     ("қайырлы таң", "ru"): "Доброе утро",
     ("мен жақсымын", "ru"): "У меня всё хорошо",
+    (
+        "сәлем, мен бүгін университетке бардым.",
+        "en",
+    ): "Hello, I went to university today.",
 }
 
 
+# MongoDB connection (optional)
 def mongo_collection():
     uri = os.getenv("MONGODB_URI", "").strip()
+
     if not uri:
         return None
 
     try:
         from pymongo import MongoClient
 
-        client = MongoClient(uri, serverSelectionTimeoutMS=1500)
+        client = MongoClient(
+            uri,
+            serverSelectionTimeoutMS=1500,
+        )
         client.admin.command("ping")
-        return client[
-            os.getenv("MONGODB_DATABASE", "tiltuzetu")
-        ]["history"]
+
+        database_name = os.getenv(
+            "MONGODB_DATABASE",
+            "tiltuzetu",
+        )
+
+        return client[database_name]["history"]
+
     except Exception:
         return None
 
 
 def save_history(record: dict):
     collection = mongo_collection()
+
     if collection is not None:
         try:
             collection.insert_one(record)
@@ -153,7 +185,12 @@ def save_history(record: dict):
             pass
 
 
-def translate_mymemory(text: str, source: str, target: str):
+# Provider 1: MyMemory
+def translate_mymemory(
+    text: str,
+    source: str,
+    target: str,
+):
     params = urlencode({
         "q": text,
         "langpair": f"{source}|{target}",
@@ -164,48 +201,112 @@ def translate_mymemory(text: str, source: str, target: str):
         "https://api.mymemory.translated.net/get?" + params,
         headers={
             "Accept": "application/json",
-            "User-Agent": "TilTuzetu-MVP/0.3",
+            "User-Agent": "TilTuzetu-MVP/0.4",
         },
     )
 
     try:
-        with urlopen(request, timeout=18) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        with urlopen(request, timeout=15) as response:
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
 
-    except HTTPError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"MyMemory API returned HTTP {exc.code}.",
-        ) from exc
-
-    except (URLError, TimeoutError, ValueError) as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Could not reach the translation service.",
+    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+        raise RuntimeError(
+            "MyMemory translation request failed."
         ) from exc
 
     response_data = data.get("responseData") or {}
-    translated = (response_data.get("translatedText") or "").strip()
+    translated = (
+        response_data.get("translatedText") or ""
+    ).strip()
 
-    if not translated or data.get("responseStatus") not in (200, "200"):
-        raise HTTPException(
-            status_code=502,
-            detail="The translation service did not return a result.",
+    if (
+        not translated
+        or data.get("responseStatus") not in (200, "200")
+    ):
+        raise RuntimeError(
+            "MyMemory did not return a valid translation."
         )
 
     return translated
 
 
+# Provider 2: Google Translate public endpoint.
+# This endpoint is unofficial and is not guaranteed to remain available.
+def translate_google(
+    text: str,
+    source: str,
+    target: str,
+):
+    params = urlencode({
+        "client": "gtx",
+        "sl": source,
+        "tl": target,
+        "dt": "t",
+        "q": text,
+    })
+
+    request = Request(
+        "https://translate.googleapis.com/translate_a/single?"
+        + params,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=20) as response:
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        translated = "".join(
+            part[0]
+            for part in data[0]
+            if part and part[0]
+        ).strip()
+
+        if not translated:
+            raise ValueError("Empty translation.")
+
+        return translated
+
+    except (
+        HTTPError,
+        URLError,
+        TimeoutError,
+        ValueError,
+        IndexError,
+        TypeError,
+        KeyError,
+    ) as exc:
+        raise RuntimeError(
+            "Google Translate is temporarily unavailable."
+        ) from exc
+
+
+# Health check
 @app.get("/api/health")
 def health():
-    mongo_enabled = bool(os.getenv("MONGODB_URI", "").strip())
-    mongo_ok = mongo_collection() is not None if mongo_enabled else False
+    mongo_enabled = bool(
+        os.getenv("MONGODB_URI", "").strip()
+    )
+    mongo_ok = (
+        mongo_collection() is not None
+        if mongo_enabled
+        else False
+    )
 
     return {
         "status": "ok",
         "app": "TilTüzету",
         "correction_mode": "rule-based-demo",
-        "translation_provider": "MyMemory with offline demo fallback",
+        "translation_provider": (
+            "MyMemory with Google Translate fallback "
+            "and offline demo"
+        ),
         "translation_configured": True,
         "database": (
             "MongoDB connected"
@@ -222,25 +323,40 @@ def config():
     return {
         "correction": {
             "mode": "rule-based-demo",
-            "note": "Sample rules only; no trained model is integrated.",
+            "note": (
+                "Sample rules only; no trained model is integrated."
+            ),
         },
         "translation": {
-            "provider": "MyMemory with offline demo fallback",
+            "provider": (
+                "MyMemory, Google Translate fallback, "
+                "and offline demo"
+            ),
             "requires_api_key": False,
             "targets": ["kk", "ru", "en"],
         },
         "database": {
             "optional": "MongoDB Atlas",
-            "configured": bool(os.getenv("MONGODB_URI", "").strip()),
+            "configured": bool(
+                os.getenv("MONGODB_URI", "").strip()
+            ),
         },
     }
 
 
-@app.post("/api/correct", response_model=CorrectResponse)
+# Correct text
+@app.post(
+    "/api/correct",
+    response_model=CorrectResponse,
+)
 def correct(request: CorrectRequest):
     original = request.text.strip()
+
     if not original:
-        raise HTTPException(status_code=400, detail="Text must not be empty.")
+        raise HTTPException(
+            status_code=400,
+            detail="Text must not be empty.",
+        )
 
     corrected, changes = correct_text(original)
 
@@ -260,12 +376,19 @@ def correct(request: CorrectRequest):
     )
 
 
-@app.post("/api/translate", response_model=TranslateResponse)
+# Translate text
+@app.post(
+    "/api/translate",
+    response_model=TranslateResponse,
+)
 def translate(request: TranslateRequest):
     text = request.text.strip()
 
     if not text:
-        raise HTTPException(status_code=400, detail="Text must not be empty.")
+        raise HTTPException(
+            status_code=400,
+            detail="Text must not be empty.",
+        )
 
     if request.source_language == request.target_language:
         raise HTTPException(
@@ -273,34 +396,50 @@ def translate(request: TranslateRequest):
             detail="Choose different source and target languages.",
         )
 
-    # Try the real translation service first.
+    translated = None
+    provider = None
+    demo = False
+
+    # First, try MyMemory.
     try:
         translated = translate_mymemory(
-            text, request.source_language, request.target_language
+            text,
+            request.source_language,
+            request.target_language,
         )
-        demo = False
         provider = "MyMemory Translation API"
 
-    except HTTPException:
-        # Use a prepared example only when an exact phrase is supported.
-        normalized = text.casefold().strip()
-        demo_translation = DEMO_TRANSLATIONS.get(
-            (normalized, request.target_language)
-        )
+    except Exception:
+        # If MyMemory fails, try Google Translate.
+        try:
+            translated = translate_google(
+                text,
+                request.source_language,
+                request.target_language,
+            )
+            provider = "Google Translate"
 
-        if demo_translation is None:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "The translation service is temporarily unavailable. "
-                    "Please try again later. Offline demo supports only "
-                    "selected example phrases."
-                ),
+        except Exception:
+            # Last fallback: exact phrases from the demo dictionary.
+            normalized = text.casefold().strip()
+            demo_translation = DEMO_TRANSLATIONS.get(
+                (normalized, request.target_language)
             )
 
-        translated = demo_translation
-        demo = True
-        provider = "offline-demo fallback"
+            if demo_translation is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "Both online translation services are "
+                        "temporarily unavailable. Please try again "
+                        "later. Offline demo supports only selected "
+                        "example phrases."
+                    ),
+                )
+
+            translated = demo_translation
+            provider = "offline-demo fallback"
+            demo = True
 
     save_history({
         "action": "translate",
@@ -321,6 +460,7 @@ def translate(request: TranslateRequest):
     )
 
 
+# Recent history
 @app.get("/api/history")
 def history():
     collection = mongo_collection()
@@ -329,7 +469,9 @@ def history():
         return {
             "enabled": False,
             "items": [],
-            "message": "MongoDB is not connected. History is disabled.",
+            "message": (
+                "MongoDB is not connected. History is disabled."
+            ),
         }
 
     try:
@@ -338,26 +480,41 @@ def history():
             .sort("_id", -1)
             .limit(20)
         )
-        return {"enabled": True, "items": items}
+
+        return {
+            "enabled": True,
+            "items": items,
+        }
 
     except Exception:
         return {
             "enabled": False,
             "items": [],
-            "message": "MongoDB history is temporarily unavailable.",
+            "message": (
+                "MongoDB history is temporarily unavailable."
+            ),
         }
 
 
+# Serve the frontend
 @app.get("/")
 def index():
     return FileResponse(
-        str(Path(__file__).parent / "static" / "index.html")
+        str(
+            Path(__file__).parent
+            / "static"
+            / "index.html"
+        )
     )
 
 
 app.mount(
     "/static",
-    StaticFiles(directory=str(Path(__file__).parent / "static")),
+    StaticFiles(
+        directory=str(
+            Path(__file__).parent / "static"
+        )
+    ),
     name="static",
 )
 
