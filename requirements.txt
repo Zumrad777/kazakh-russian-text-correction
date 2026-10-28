@@ -1,3 +1,7 @@
-fastapi>=0.110,<1.0
-uvicorn[standard]>=0.27,<1.0
-pymongo>=4.6,<5.0
+fastapi
+uvicorn[standard]
+pydantic-settings
+httpx
+python-dotenv
+pytest
+pytest-asyncio
